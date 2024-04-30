@@ -1,2 +1,5 @@
 #ignore directory
 node_modules/
+
+#ignore dotenv
+src/.env

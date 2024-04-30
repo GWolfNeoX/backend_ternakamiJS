@@ -2,11 +2,13 @@ const express = require('express');
 const { getUserByEmail, insertUser, verifyToken } = require('./handler');
 const db = require('./database');
 const moment = require('moment-timezone');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 
 const router = express.Router();
 
+//API untuk registrasi User
 router.post('/api/auth/register', async (req, res) => {
     const { email, password, fullname } = req.body;
 
@@ -36,17 +38,20 @@ router.post('/api/auth/register', async (req, res) => {
             statusCode: 201
         });
     } catch (error) {
+        console.error("Error during registration:", error);
         res.status(500).json({
-            message: 'Internal Server Error',
+            message: 'Internal Server Error during registration',
             statusCode: 500
         });
     }
 });
 
+//API untuk validasi token user saat berhasil Login
 router.get('/api/validation', verifyToken, (req, res) => {
     res.json({ message: 'Token is still valid', decodedUser: req.decoded });
 });
 
+//API untuk Login User
 router.post('/api/auth/login', (req, res) => {
     const { email, password } = req.body;
     db.query('SELECT * FROM users WHERE email = ?', [email], async (err, result) => {
@@ -58,7 +63,7 @@ router.post('/api/auth/login', (req, res) => {
 
         const token = jwt.sign(
             { id: result[0].id, fullname: result[0].fullname }, // Menambahkan fullname
-            'Tes123', 
+            process.env.JWT_SECRET, // Menggunakan JWT_SECRET untuk enkode token
             { expiresIn: '7d' }
         );
         res.status(200).json({
@@ -73,6 +78,7 @@ router.post('/api/auth/login', (req, res) => {
         });
     });
 });
+
 
 router.post('/api/predict', verifyToken, (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
@@ -162,8 +168,11 @@ router.get('/api/history', verifyToken, (req, res) => {
     });
 });
 
+//API untuk masuk ke Homepage setelah berhasil Login
 router.get('/api/homepage', verifyToken, (req, res) => {
     res.json({ message: `Welcome, ${req.decoded.fullname}` });
 });
+
+//Nanti dapa yang buat logout di frontend
 
 module.exports = router;
