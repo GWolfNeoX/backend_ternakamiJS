@@ -3,3 +3,4 @@ node_modules/
 
 #ignore dotenv
 src/.env
+src/cloudrun-ternakami-5b766353ac75.json

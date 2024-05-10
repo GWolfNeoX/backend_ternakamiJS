@@ -5,6 +5,10 @@ const moment = require('moment-timezone');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
+const FormData = require('form-data');
+const { Storage } = require('@google-cloud/storage');
+const dotenv = require('dotenv');
+dotenv.config();
 
 const router = express.Router();
 
@@ -79,52 +83,80 @@ router.post('/api/auth/login', (req, res) => {
     });
 });
 
+//Dalam Pengembang!!
+// Inisialisasi Google Cloud Storage
+const storage = new Storage({
+    projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+    keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS
+});
+const bucket = storage.bucket(process.env.GOOGLE_CLOUD_STORAGE_BUCKET);
 
-router.post('/api/predict', verifyToken, (req, res) => {
+// Modifikasi API untuk terkoneksi dengan link yang diminta dan menyimpan gambar di Google Cloud Storage
+router.post('/api/predict', verifyToken, async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {
-        return res.status(401).json({   message: 'No token provided' });
+        return res.status(401).json({ message: 'No token provided' });
     }
 
-    jwt.verify(token, 'Tes123', async (err, decoded) => {
+    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
         if (err) {
-            return res.status(500).json({   message: 'Failed to authenticate token' });
+            return res.status(500).json({ message: 'Failed to authenticate token' });
         }
 
         if (!req.files || !req.files.image || !req.body.type || !req.body.Animal_Name) {
             return res.status(400).json({ "error": "No image, type, or Animal_Name specified" });
         }
 
-        const animalType = req.body.type; // Tipe hewan
-        const animalName = req.body.Animal_Name; // Nama hewan
-        const formData = new FormData();
-        formData.append('image', req.files.image.data, req.files.image.name);
-        formData.append('type', animalType);
-        formData.append('Animal_Name', animalName);
+        const animalType = req.body.type;
+        const animalName = req.body.Animal_Name;
 
-        // Simpan data history
-        const created_at = moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+        const imageFile = req.files.image;
+        const folderName = "image"; // Nama folder di dalam bucket
+        const fileName = `${folderName}/${Date.now()}-${imageFile.name}`;
 
-        // Lakukan prediksi
-        axios.post('http://127.0.0.1:8080/predict', formData, { headers: formData.getHeaders() })
-            .then(async response => {
+        const file = bucket.file(fileName);
+        const stream = file.createWriteStream({
+            metadata: {
+                contentType: imageFile.mimetype
+            }
+        });
+
+        stream.on('error', (err) => {
+            console.error("Error uploading image to Google Cloud Storage:", err);
+            res.status(500).json({ "error": "Error uploading image to Google Cloud Storage" });
+        });
+
+        stream.on('finish', async () => {
+            const created_at = moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+
+            const formData = new FormData();
+            formData.append('image', fileName);
+            formData.append('type', animalType);
+            formData.append('Animal_Name', animalName);
+
+            try {
+                const response = await axios.post('https://ta2-backend-ml-mobilenet-6dbk6jg74a-et.a.run.app', formData, {
+                    headers: {
+                        ...formData.getHeaders()
+                    }
+                });
+
                 const predictionResult = response.data;
                 const { class: predictionClass, probability } = predictionResult;
 
-                // Simpan data history
                 db.query(
                     'INSERT INTO history (user_id, animal_type, animal_name, created_at, prediction_class, prediction_probability) VALUES (?, ?, ?, ?, ?, ?)',
                     [decoded.id, animalType, animalName, created_at, predictionClass, probability],
                     (error, result) => {
                         if (error) {
+                            console.error("Error saving history:", error);
                             return res.status(500).json({ "error": "Error saving history" });
                         }
 
-                        res.json(predictionResult); // Kirim response ke user
+                        res.json(predictionResult);
                     }
                 );
-            })
-            .catch(error => {
+            } catch (error) {
                 let status = 500;
                 let message = "Error: " + error.message;
 
@@ -136,12 +168,18 @@ router.post('/api/predict', verifyToken, (req, res) => {
                     message = "Service API is currently under maintenance, please try again shortly.";
                 }
 
+                console.error("Error during prediction:", error);
                 res.status(status).json({ "error": message });
-            });
+            }
+        });
+
+        stream.end(imageFile.data);
     });
 });
 
-router.get('/api/history', verifyToken, (req, res) => {
+
+//Dalam Pengembang!!
+router.get('/api/historyPredict', verifyToken, (req, res) => {
     const userId = req.decoded.id;
 
     // Ambil data history berdasarkan user_id
@@ -173,6 +211,7 @@ router.get('/api/homepage', verifyToken, (req, res) => {
     res.json({ message: `Welcome, ${req.decoded.fullname}` });
 });
 
-//Nanti dapa yang buat logout di frontend
+//Logout
+
 
 module.exports = router;
