@@ -7,6 +7,7 @@ const jwt = require("jsonwebtoken");
 const axios = require("axios");
 const FormData = require("form-data");
 const { Storage } = require("@google-cloud/storage");
+const { v4: uuidv4 } = require('uuid');
 const dotenv = require("dotenv");
 dotenv.config();
 
@@ -98,121 +99,126 @@ const storage = new Storage({
 });
 const bucket = storage.bucket(process.env.GOOGLE_CLOUD_STORAGE_BUCKET);
 
-//API untuk predict mata hewan
-router.post("/api/predict", verifyToken, async (req, res) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) {
-    return res.status(401).json({ message: "No token provided" });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-    if (err) {
-      return res.status(500).json({ message: "Failed to authenticate token" });
+  // API untuk predict mata hewan
+  router.post("/api/predict", verifyToken, async (req, res) => {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ message: "No token provided" });
     }
 
-    if (
-      !req.files ||
-      !req.files.image ||
-      !req.body.type ||
-      !req.body.Animal_Name
-    ) {
-      return res
-        .status(400)
-        .json({ error: "No image, type, or Animal_Name specified" });
-    }
-
-    const imageFile = req.files.image;
-    const animalType = req.body.type;
-    const animalName = req.body.Animal_Name;
-
-    try {
-      // Mengirim data yang diperlukan ke backend machine learning
-      const formData = new FormData();
-      formData.append("image", imageFile.data, { filename: imageFile.name });
-      formData.append("type", animalType);
-      formData.append("Animal_Name", animalName);
-
-      // Mengirim permintaan ke backend machine learning
-      const response = await axios.post(
-        "http://192.168.1.9:5000/api/predict",
-        formData,
-        {
-          headers: {
-            ...formData.getHeaders(), // Menggunakan formData.getHeaders() untuk mendapatkan header yang benar
-          },
-        }
-      );
-
-      const predictionResult = response.data;
-
-      // Menyimpan prediksi dan gambar ke Google Cloud Storage
-      let filename = `Mata_Hewan_${animalName}.jpg`; // Menggunakan nama file default
-
-      // Menentukan nama file berdasarkan hasil prediksi
-      const label = predictionResult.label_prediksi;
-      if (label === "Mata Terlihat Sehat") {
-        filename = `Mata_Hewan_Sehat_${animalName}.jpg`;
-      } else if (label === "Mata Terjangkit PinkEye") {
-        filename = `Mata_Hewan_Terjangkit_Pink_Eye_${animalName}.jpg`;
+    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+      if (err) {
+        return res.status(500).json({ message: "Failed to authenticate token" });
       }
 
-      const blob = bucket.file(filename);
+      if (
+        !req.files ||
+        !req.files.image ||
+        !req.body.type ||
+        !req.body.Animal_Name
+      ) {
+        return res
+          .status(400)
+          .json({ error: "No image, type, or Animal_Name specified" });
+      }
 
-      const stream = blob.createWriteStream({
-        metadata: {
-          contentType: imageFile.mimetype,
-        },
-      });
+      const imageFile = req.files.image;
+      const animalType = req.body.type;
+      const animalName = req.body.Animal_Name;
+      const uuid = uuidv4();
 
-      stream.on("error", (err) => {
-        console.error("Error uploading image to Google Cloud Storage:", err);
-        return res.status(500).json({ error: "Error uploading image" });
-      });
+      try {
+        // Mengirim data yang diperlukan ke backend machine learning
+        const formData = new FormData();
+        formData.append("image", imageFile.data, { filename: imageFile.name });
+        formData.append("type", animalType);
+        formData.append("Animal_Name", animalName);
 
-      stream.on("finish", async () => {
-        try {
-          // Dapatkan URL gambar yang telah diunggah
-          const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+        // Mengirim permintaan ke backend machine learning
+        const response = await axios.post(
+          "https://backend-ml-ternakami-app-yhznsvdbpq-et.a.run.app/api/predict",
+          formData,
+          {
+            headers: {
+              ...formData.getHeaders(),
+            },
+          }
+        );
 
-          const created_at = moment()
-            .tz("Asia/Jakarta")
-            .format("YYYY-MM-DD HH:mm:ss");
+        const predictionResult = response.data;
 
-          db.query(
-            "INSERT INTO predictions (user_id, animal_type, animal_name, prediction_class, prediction_probability, image_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [
-              decoded.id,
-              animalType,
-              animalName,
-              predictionResult.label_prediksi,
-              predictionResult.confidence,
-              publicUrl,
-              created_at,
-            ],
-            (error, result) => {
-              if (error) {
-                console.error("Error saving prediction:", error);
-                return res
-                  .status(500)
-                  .json({ error: "Error saving prediction" });
-              }
+        // Menyimpan prediksi dan gambar ke Google Cloud Storage
+        let filename = `${uuid}_Mata_Hewan_${animalName}.jpg`;
 
-              res.json(predictionResult);
-            }
-          );
-        } catch (error) {
-          console.error("Error during prediction:", error);
-          res.status(500).json({ error: "Error during prediction" });
+        // Menentukan nama file berdasarkan hasil prediksi
+        const label = predictionResult.label_prediksi;
+        if (label === "Mata Terlihat Sehat") {
+          filename = `${uuid}_Mata_Hewan_Sehat_${animalName}.jpg`;
+        } else if (label === "Mata Terjangkit PinkEye") {
+          filename = `${uuid}_Mata_Hewan_Terjangkit_Pink_Eye_${animalName}.jpg`;
         }
-      });
 
-      stream.end(imageFile.data);
-    } catch (error) {
-      console.error("Error during prediction:", error);
-      res.status(500).json({ error: "Error during prediction" });
-    }
+        const blob = bucket.file(filename);
+
+        const stream = blob.createWriteStream({
+          metadata: {
+            contentType: imageFile.mimetype,
+          },
+        });
+
+        stream.on("error", (err) => {
+          console.error("Error uploading image to Google Cloud Storage:", err);
+          return res.status(500).json({ error: "Error uploading image" });
+        });
+
+        stream.on("finish", async () => {
+          try {
+            // Dapatkan URL gambar yang telah diunggah
+            const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+
+            const created_at = moment()
+              .tz("Asia/Jakarta")
+              .format("YYYY-MM-DD HH:mm:ss");
+
+            db.query(
+              "INSERT INTO predictions (user_id, animal_type, animal_name, prediction_class, prediction_probability, image_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+              [
+                decoded.id,
+                animalType,
+                animalName,
+                predictionResult.label_prediksi,
+                predictionResult.confidence,
+                publicUrl,
+                created_at,
+              ],
+              (error, result) => {
+                if (error) {
+                  console.error("Error saving prediction:", error);
+                  return res
+                    .status(500)
+                    .json({ error: "Error saving prediction" });
+                }
+
+                // Menambahkan URL gambar ke dalam respons JSON
+                res.json({
+                  ...predictionResult,
+                  image_url: publicUrl,
+                });
+              }
+            );
+          } catch (error) {
+            console.error("Error during prediction:", error);
+            res.status(500).json({ error: "Error during prediction" });
+          }
+        });
+
+        stream.end(imageFile.data);
+      } catch (error) {
+        console.error("Error during prediction:", error);
+        res.status(500).json({ error: "Error during prediction" });
+      }
+    });
   });
-});
 
 //API untuk mengetahui history predict yang telah dilakukan
 router.get("/api/historyPredict", verifyToken, (req, res) => {
@@ -225,6 +231,12 @@ router.get("/api/historyPredict", verifyToken, (req, res) => {
     (error, result) => {
       if (error) {
         return res.status(500).json({ error: "Error fetching history" });
+      }
+
+      if (result.length === 0) {
+        return res
+          .status(404)
+          .json({ message: "No prediction history found for this user." });
       }
 
       // Mengubah format waktu pada setiap data history
@@ -255,5 +267,6 @@ router.get("/api/homepage", verifyToken, (req, res) => {
 });
 
 //Logout
+
 
 module.exports = router;
