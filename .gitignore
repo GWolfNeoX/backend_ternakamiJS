@@ -2,5 +2,5 @@
 node_modules/
 
 #ignore dotenv
-src/.env
-src/testing-backendternakamijs-01-4bbac1e803ce.json
+.env
+key.json

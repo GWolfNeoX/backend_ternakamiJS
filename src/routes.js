@@ -8,7 +8,8 @@ const axios = require("axios");
 const FormData = require("form-data");
 const { Storage } = require("@google-cloud/storage");
 const { v4: uuidv4 } = require('uuid');
-const dotenv = require("dotenv");
+const dotenv = require('dotenv');
+require('dotenv').config({ path: '../.env' });
 dotenv.config();
 
 const router = express.Router();
