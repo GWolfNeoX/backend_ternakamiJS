@@ -3,8 +3,6 @@ const express = require("express");
 const fileUpload = require("express-fileupload");
 const cors = require("cors");
 
-const app = express();
-
 const middleware = (app) => {
   app.use(bodyParser.json());
   app.use(fileUpload());
