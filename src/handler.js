@@ -14,16 +14,26 @@ dotenv.config();
 class MyEmitter extends EventEmitter {}
 const myEmitter = new MyEmitter();
 
+myEmitter.on('register', async (data, callback) => {
+  console.log(`Register user - ${data.email}`);
+  try {
+    const existingUser = await getUserByEmail(data.email);
+
+    if (existingUser) {
+      callback({ message: "Email already registered" }, null);
+    } else {
+      const hashedPassword = await bcrypt.hash(data.password, 10);
+      await insertUser(data.email, hashedPassword, data.fullname);
+      callback(null, { message: "Registration successful" });
+    }
+  } catch (error) {
+    callback(error, null);
+  }
+});
+
 myEmitter.on('userRegistered', (user) => {
   console.log(`User registered - ${user.email}`);
 });
-
-// Inisialisasi Google Cloud Storage
-const storage = new Storage({
-  projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
-const bucket = storage.bucket(process.env.GOOGLE_CLOUD_STORAGE_BUCKET);
 
 // Fungsi untuk mendapatkan pengguna berdasarkan email
 const getUserByEmail = (email) => {
@@ -76,6 +86,84 @@ const insertUser = (email, hashedPassword, fullname) => {
     );
   });
 };
+
+// Fungsi untuk login user
+const loginUser = (email, password) => {
+  return new Promise((resolve, reject) => {
+    db.query("SELECT * FROM users WHERE email = ?", [email], async (err, result) => {
+      if (err) reject(err);
+
+      if (
+        result.length === 0 ||
+        !(await bcrypt.compare(password, result[0].password))
+      ) {
+        resolve(null);
+      } else {
+        const token = jwt.sign(
+          { id: result[0].id, fullname: result[0].fullname }, // Menambahkan fullname
+          process.env.JWT_SECRET, // Menggunakan JWT_SECRET untuk enkode token
+          { expiresIn: "7d" }
+        );
+        resolve({
+          email: result[0].email,
+          fullname: result[0].fullname,
+          token: token,
+          userid: result[0].id,
+        });
+      }
+    });
+  });
+};
+
+myEmitter.on('login', async (data, callback) => {
+  console.log(`User login - ${data.email}`);
+  try {
+    const loginResult = await loginUser(data.email, data.password);
+    if (loginResult) {
+      callback(null, loginResult);
+    } else {
+      callback({ message: "Wrong Password or Account not found" }, null);
+    }
+  } catch (error) {
+    callback(error, null);
+  }
+});
+
+// Fungsi untuk memverifikasi token
+const verifyToken = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "No token provided" });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      if (err.name === "TokenExpiredError") {
+        return res
+          .status(401)
+          .json({ message: "Token Expired. Please Login!" });
+      } else if (err.name === "JsonWebTokenError") {
+        return res
+          .status(401)
+          .json({ message: "Invalid token. Please provide a valid token." });
+      } else {
+        return res
+          .status(401)
+          .json({ message: "Failed to authenticate token" });
+      }
+    }
+
+    req.decoded = decoded;
+    next();
+  });
+};
+
+// Inisialisasi Google Cloud Storage
+const storage = new Storage({
+  projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+});
+const bucket = storage.bucket(process.env.GOOGLE_CLOUD_STORAGE_BUCKET);
 
 // Fungsi untuk mengunggah file ke Google Cloud Storage
 const uploadFileToGCS = (file, filename) => {
@@ -138,77 +226,6 @@ myEmitter.on('fetchHistory', async (userId, callback) => {
   try {
     const history = await getHistoryPredict(userId);
     callback(null, history);
-  } catch (error) {
-    callback(error, null);
-  }
-});
-
-// Fungsi untuk memverifikasi token
-const verifyToken = (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) {
-    return res.status(401).json({ message: "No token provided" });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) {
-      if (err.name === "TokenExpiredError") {
-        return res
-          .status(401)
-          .json({ message: "Token Expired. Please Login!" });
-      } else if (err.name === "JsonWebTokenError") {
-        return res
-          .status(401)
-          .json({ message: "Invalid token. Please provide a valid token." });
-      } else {
-        return res
-          .status(401)
-          .json({ message: "Failed to authenticate token" });
-      }
-    }
-
-    req.decoded = decoded;
-    next();
-  });
-};
-
-// Fungsi untuk login user
-const loginUser = (email, password) => {
-  return new Promise((resolve, reject) => {
-    db.query("SELECT * FROM users WHERE email = ?", [email], async (err, result) => {
-      if (err) reject(err);
-
-      if (
-        result.length === 0 ||
-        !(await bcrypt.compare(password, result[0].password))
-      ) {
-        resolve(null);
-      } else {
-        const token = jwt.sign(
-          { id: result[0].id, fullname: result[0].fullname }, // Menambahkan fullname
-          process.env.JWT_SECRET, // Menggunakan JWT_SECRET untuk enkode token
-          { expiresIn: "7d" }
-        );
-        resolve({
-          email: result[0].email,
-          fullname: result[0].fullname,
-          token: token,
-          userid: result[0].id,
-        });
-      }
-    });
-  });
-};
-
-myEmitter.on('login', async (data, callback) => {
-  console.log(`User login - ${data.email}`);
-  try {
-    const loginResult = await loginUser(data.email, data.password);
-    if (loginResult) {
-      callback(null, loginResult);
-    } else {
-      callback({ message: "Wrong Password or Account not found" }, null);
-    }
   } catch (error) {
     callback(error, null);
   }
@@ -315,23 +332,6 @@ myEmitter.on('predict', async (req, callback) => {
   try {
     const result = await predictAnimalEye(req);
     callback(null, result);
-  } catch (error) {
-    callback(error, null);
-  }
-});
-
-myEmitter.on('register', async (data, callback) => {
-  console.log(`Register user - ${data.email}`);
-  try {
-    const existingUser = await getUserByEmail(data.email);
-
-    if (existingUser) {
-      callback({ message: "Email already registered" }, null);
-    } else {
-      const hashedPassword = await bcrypt.hash(data.password, 10);
-      await insertUser(data.email, hashedPassword, data.fullname);
-      callback(null, { message: "Registration successful" });
-    }
   } catch (error) {
     callback(error, null);
   }
