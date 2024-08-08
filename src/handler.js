@@ -189,48 +189,6 @@ const uploadFileToGCS = (file, filename) => {
   });
 };
 
-// Fungsi untuk mendapatkan riwayat prediksi berdasarkan user_id
-const getHistoryPredict = (userId) => {
-  return new Promise((resolve, reject) => {
-    db.query("SELECT * FROM predictions WHERE user_id = ?", [userId], (err, result) => {
-      if (err) {
-        reject(err);
-      } else {
-        if (result.length === 0) {
-          resolve([]);
-        } else {
-          const formattedResult = result.map((item) => {
-            const formattedCreatedAt = moment(item.created_at)
-              .tz("Asia/Jakarta")
-              .format("YYYY-MM-DD HH:mm:ss");
-            return {
-              id: item.id,
-              user_id: item.user_id,
-              animal_type: item.animal_type,
-              animal_name: item.animal_name,
-              prediction_class: item.prediction_class,
-              prediction_probability: item.prediction_probability,
-              image_url: item.image_url,
-              formatted_created_at: formattedCreatedAt,
-            };
-          });
-          resolve(formattedResult);
-        }
-      }
-    });
-  });
-};
-
-myEmitter.on('fetchHistory', async (userId, callback) => {
-  console.log(`Fetching history for user ID - ${userId}`);
-  try {
-    const history = await getHistoryPredict(userId);
-    callback(null, history);
-  } catch (error) {
-    callback(error, null);
-  }
-});
-
 // Fungsi untuk prediksi mata hewan
 const predictAnimalEye = async (req) => {
   const token = req.headers.authorization?.split(" ")[1];
@@ -269,7 +227,7 @@ const predictAnimalEye = async (req) => {
 
   // Mengirim permintaan ke backend machine learning
   const response = await axios.post(
-    "https://ml-ternakami-4f6b5a2230fd.herokuapp.com/api/predict",
+    "https://backendml-dot-beaming-benefit-428700-h7.et.r.appspot.com/api/predict",
     formData,
     {
       headers: {
@@ -332,6 +290,48 @@ myEmitter.on('predict', async (req, callback) => {
   try {
     const result = await predictAnimalEye(req);
     callback(null, result);
+  } catch (error) {
+    callback(error, null);
+  }
+});
+
+// Fungsi untuk mendapatkan riwayat prediksi berdasarkan user_id
+const getHistoryPredict = (userId) => {
+  return new Promise((resolve, reject) => {
+    db.query("SELECT * FROM predictions WHERE user_id = ?", [userId], (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        if (result.length === 0) {
+          resolve([]);
+        } else {
+          const formattedResult = result.map((item) => {
+            const formattedCreatedAt = moment(item.created_at)
+              .tz("Asia/Jakarta")
+              .format("YYYY-MM-DD HH:mm:ss");
+            return {
+              id: item.id,
+              user_id: item.user_id,
+              animal_type: item.animal_type,
+              animal_name: item.animal_name,
+              prediction_class: item.prediction_class,
+              prediction_probability: item.prediction_probability,
+              image_url: item.image_url,
+              formatted_created_at: formattedCreatedAt,
+            };
+          });
+          resolve(formattedResult);
+        }
+      }
+    });
+  });
+};
+
+myEmitter.on('fetchHistory', async (userId, callback) => {
+  console.log(`Fetching history for user ID - ${userId}`);
+  try {
+    const history = await getHistoryPredict(userId);
+    callback(null, history);
   } catch (error) {
     callback(error, null);
   }

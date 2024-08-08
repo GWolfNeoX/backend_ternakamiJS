@@ -3,6 +3,7 @@ node_modules/
 
 #ignore dotenv
 .env
+swagger.yaml
 key.json
 
 #ignore sql-db

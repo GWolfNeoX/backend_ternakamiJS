@@ -1,0 +1,288 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+      "title": "Ternakami API Documentation",
+      "version": "1.0.0",
+      "description": "Documentation for Ternakami API"
+    },
+    "servers": [
+      {
+        "url": "http://localhost:4000",
+        "description": "Local server"
+      }
+    ],
+    "components": {
+      "securitySchemes": {
+        "bearerAuth": {
+          "type": "http",
+          "scheme": "bearer",
+          "bearerFormat": "JWT"
+        }
+      }
+    },
+    "security": [
+      {
+        "bearerAuth": []
+      }
+    ],
+    "paths": {
+      "/api/auth/register": {
+        "post": {
+          "summary": "Register a new user",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "string"
+                    },
+                    "password": {
+                      "type": "string"
+                    },
+                    "fullname": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "201": {
+              "description": "Successful Account Registration"
+            },
+            "400": {
+              "description": "Bad Request"
+            }
+          }
+        }
+      },
+      "/api/auth/login": {
+        "post": {
+          "summary": "Login user",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "string"
+                    },
+                    "password": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Login Success"
+            },
+            "400": {
+              "description": "Bad Request"
+            }
+          }
+        }
+      },
+      "/api/validation": {
+        "get": {
+          "summary": "Validate user token",
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Token is still valid"
+            },
+            "401": {
+              "description": "Unauthorized"
+            }
+          }
+        }
+      },
+      "/api/predict": {
+        "post": {
+          "summary": "Predict animal eye condition",
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "image": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "Animal_Name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Prediction successful"
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/historyPredict": {
+        "get": {
+          "summary": "Get prediction history for user",
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful retrieval of prediction history",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "user_id": {
+                          "type": "integer"
+                        },
+                        "animal_type": {
+                          "type": "string"
+                        },
+                        "animal_name": {
+                          "type": "string"
+                        },
+                        "prediction_class": {
+                          "type": "string"
+                        },
+                        "prediction_probability": {
+                          "type": "number"
+                        },
+                        "image_url": {
+                          "type": "string"
+                        },
+                        "formatted_created_at": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "No prediction history found"
+            },
+            "500": {
+              "description": "Error fetching history"
+            }
+          }
+        }
+      },
+      "/api/homepage": {
+        "get": {
+          "summary": "Access homepage after login",
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Welcome message"
+            }
+          }
+        }
+      },
+      "/api/articles/{id}": {
+        "get": {
+          "summary": "Get article by ID",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful retrieval of article",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "integer"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "content": {
+                        "type": "string"
+                      },
+                      "author": {
+                        "type": "string"
+                      },
+                      "published_date": {
+                        "type": "string"
+                      },
+                      "img_url": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Article not found"
+            },
+            "500": {
+              "description": "Error during article retrieval"
+            }
+          }
+        }
+      },
+      "/": {
+        "get": {
+          "summary": "API Test",
+          "responses": {
+            "200": {
+              "description": "API is running normally"
+            }
+          }
+        }
+      }
+    }
+  }
