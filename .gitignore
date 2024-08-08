@@ -4,3 +4,6 @@ node_modules/
 #ignore dotenv
 .env
 key.json
+
+#ignore sql-db
+sql-db/

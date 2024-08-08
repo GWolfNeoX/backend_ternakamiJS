@@ -305,7 +305,7 @@ const predictAnimalEye = async (req) => {
         animalType,
         animalName,
         label,
-        predictionResult.probabilitas,
+        predictionResult.confidence,
         publicUrl,
         created_at,
       ],

@@ -8,10 +8,9 @@ dotenv.config();
 const router = express.Router();
 
 // API untuk registrasi User
-router.post("/api/auth/register", (req, res) => {
+router.post("/api/auth/register", async (req, res) => {
   const { email, password, fullname } = req.body;
 
-  // Validasi input
   if (!email || !password || !fullname) {
     return res.status(400).json({
       message: "Email, Password, and Fullname fields must all be filled",
